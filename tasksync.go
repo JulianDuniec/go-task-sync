@@ -91,11 +91,12 @@ func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 // shut down.
 func (this *Synchronizer) Run() {
 	for _, t := range this.tasks {
-		go func() {
+
+		go func(t *task) {
 			this.wg.Add(1)
 			t.fn(t.quitChan)
 			defer this.wg.Done()
-		}()
+		}(t)
 	}
 }
 
@@ -103,9 +104,9 @@ func (this *Synchronizer) Run() {
 // and await completion OR timeout
 func (this *Synchronizer) Stop() bool {
 	for _, t := range this.tasks {
-		go func() {
+		go func(t *task) {
 			t.quitChan <- true
-		}()
+		}(t)
 
 	}
 

@@ -1,6 +1,7 @@
 package tasksync
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -83,6 +84,43 @@ func TestContinous(t *testing.T) {
 		t.Log(r.counter)
 		t.Fail()
 	}
+}
+
+/*
+   Run a continous function and specify how to stop it
+*/
+func TestContinousMulti(t *testing.T) {
+	synchronizer := NewSynchronizer(10 * time.Second)
+	numRunners := 10
+	runners := make([]*Runner, numRunners)
+
+	for i := 0; i < numRunners; i++ {
+		r := &Runner{true, false, 0}
+		synchronizer.Continous(r.Run, r.Stop)
+		runners[i] = r
+	}
+
+	synchronizer.Run()
+
+	time.Sleep(1 * time.Second)
+
+	timeout := synchronizer.Stop()
+
+	if timeout {
+		t.Log("Unexpected timeout")
+		t.Fail()
+	}
+	for i, r := range runners {
+		if r.counter < 10 {
+			t.Log(fmt.Sprintf("failed runcount on runner %d, was %d, expected < 10", i, r.counter))
+			t.Fail()
+		}
+		if !r.graceful {
+			t.Log(fmt.Sprintf("Runner %d did not quit gracefully", i))
+			t.Fail()
+		}
+	}
+
 }
 
 type Runner struct {
