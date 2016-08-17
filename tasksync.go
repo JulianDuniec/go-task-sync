@@ -1,7 +1,6 @@
 package tasksync
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -74,7 +73,6 @@ func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 		// Await quit-msg, and run stop.
 		select {
 		case <-quitChan:
-			fmt.Println("Quitchan, run stop")
 			stop()
 		}
 
