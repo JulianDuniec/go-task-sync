@@ -1,6 +1,7 @@
 package tasksync
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -58,10 +59,20 @@ func (this *Synchronizer) Every(duration time.Duration) periodic {
 
 func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 	this.addTask(newTask(func(quitChan chan bool) {
-		go run()
+		donechn := make(chan bool)
+		go func() {
+			run()
+			donechn <- true
+		}()
 		select {
 		case <-quitChan:
+			fmt.Println("Quitchan, run stop")
 			stop()
+		}
+		select {
+		case <-donechn:
+			// run is done
+			return
 		}
 	}))
 }

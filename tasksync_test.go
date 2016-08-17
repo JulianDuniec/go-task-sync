@@ -61,31 +61,44 @@ func TestLongPeriodic(t *testing.T) {
    Run a continous function and specify how to stop it
 */
 func TestContinous(t *testing.T) {
-	executionCount := 0
-	synchronizer := NewSynchronizer(1 * time.Second)
-	running := true
+	r := &Runner{true, false, 0}
+	synchronizer := NewSynchronizer(10 * time.Second)
 
-	synchronizer.Continous(func() {
-		for running {
-			time.Sleep(1 * time.Millisecond)
-			executionCount++
-		}
-	}, func() {
-		running = false
-	})
+	synchronizer.Continous(r.Run, r.Stop)
 
 	synchronizer.Run()
 
 	time.Sleep(1 * time.Second)
+
 	timeout := synchronizer.Stop()
 	if timeout {
 		t.Log("Unexpected timeout")
 		t.Fail()
 	}
-
-	if executionCount < 10 {
+	if !r.graceful {
+		t.Log("Ungraceful shutdown")
+	}
+	if r.counter < 10 {
 		t.Log("Unexpected execution count")
-		t.Log(executionCount)
+		t.Log(r.counter)
 		t.Fail()
 	}
+}
+
+type Runner struct {
+	running  bool
+	graceful bool
+	counter  int
+}
+
+func (r *Runner) Run() {
+	for r.running {
+		r.counter++
+		time.Sleep(10 * time.Millisecond)
+	}
+	r.graceful = true
+}
+
+func (r *Runner) Stop() {
+	r.running = false
 }
