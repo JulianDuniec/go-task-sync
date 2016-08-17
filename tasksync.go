@@ -53,22 +53,32 @@ func (this periodic) Do(f emptyfunction) {
 	}))
 }
 
+// Run a method periodically. This is a chainable call (returns periodic)
+// which has a "Do" method to specify the method to run
 func (this *Synchronizer) Every(duration time.Duration) periodic {
 	return periodic{this, duration}
 }
 
+// Run a continous method with a custom
+// stop function.
 func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 	this.addTask(newTask(func(quitChan chan bool) {
 		donechn := make(chan bool)
+		// Split new goroutine for the run-method.
+		// Notify donechn when it finished running.
 		go func() {
 			run()
 			donechn <- true
 		}()
+
+		// Await quit-msg, and run stop.
 		select {
 		case <-quitChan:
 			fmt.Println("Quitchan, run stop")
 			stop()
 		}
+
+		// Await done from Run().
 		select {
 		case <-donechn:
 			// run is done
