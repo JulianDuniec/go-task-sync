@@ -22,10 +22,11 @@ func BlockUntilQuit() {
 // Factory method for synchronizer object
 func NewSynchronizer(timeout time.Duration) *Synchronizer {
 	wg := sync.WaitGroup{}
+	mutex := &sync.Mutex{}
 	tasks := make([]*task, 0)
 
 	return &Synchronizer{
-		tasks, &wg, timeout,
+		tasks, &wg, timeout, mutex,
 	}
 }
 
@@ -35,18 +36,32 @@ type Synchronizer struct {
 	tasks   []*task
 	wg      *sync.WaitGroup
 	timeout time.Duration
+	mutex   *sync.Mutex
 }
 
 // Allows chaining Every(duration).Do
-func (this periodic) Do(f emptyfunction) {
+func (this periodic) Do(task emptyfunction) {
 	this.ts.addTask(newTask(func(quitChan chan bool) {
 		for {
-			f()
+			// Keep track of duration of task
+			t := time.Now()
+
+			task()
+
+			// Calculate delta-time and
+			// use the difference as wait-time, in
+			// order to match the desired interval
+			// between executions of the task
+			dt := time.Now().Sub(t)
+			waitDuration := this.duration - dt
+
+			// If waitDuration is negative, the task is
+			// longer than the desired interval. This also means that the next execution will
+			// be made immediately, unless we receive from quitchan.
 			select {
 			case <-quitChan:
 				return
-			case <-time.After(this.duration):
-
+			case <-time.After(waitDuration):
 			}
 		}
 	}))
@@ -90,33 +105,50 @@ func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 // used to keep track if all tasks gracefully
 // shut down.
 func (this *Synchronizer) Run() {
+	this.mutex.Lock()
 	for _, t := range this.tasks {
-
+		// NOTE: It's very important to parameterize
+		// the goroutine, otherwise the task-value
+		// will be overwritten by the next
+		// value in the iteration
 		go func(t *task) {
 			this.wg.Add(1)
 			t.fn(t.quitChan)
 			defer this.wg.Done()
 		}(t)
 	}
+	this.mutex.Unlock()
 }
 
 // Signal quit to all running tasks
 // and await completion OR timeout
 func (this *Synchronizer) Stop() bool {
+
+	// Signal quit to all tasks
+	this.mutex.Lock()
 	for _, t := range this.tasks {
+		// NOTE: It's very important to parameterize
+		// the goroutine, otherwise the task-value
+		// will be overwritten by the next
+		// value in the iteration
 		go func(t *task) {
 			t.quitChan <- true
 		}(t)
 
 	}
+	this.mutex.Unlock()
 
 	doneChn := make(chan bool)
 
+	// Await all tasks to complete and
+	// signal completion to done-channel
 	go func() {
 		this.wg.Wait()
 		doneChn <- true
 	}()
 
+	// Wait for either completion of all tasks,
+	// or timeout
 	select {
 	case <-time.After(this.timeout):
 		return true
@@ -126,7 +158,9 @@ func (this *Synchronizer) Stop() bool {
 }
 
 func (this *Synchronizer) addTask(t *task) {
+	this.mutex.Lock()
 	this.tasks = append(this.tasks, t)
+	this.mutex.Unlock()
 }
 
 func newTask(taskFn taskfunction) *task {
