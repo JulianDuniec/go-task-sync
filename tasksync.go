@@ -21,22 +21,28 @@ func BlockUntilQuit() {
 
 // Factory method for synchronizer object
 func NewSynchronizer(timeout time.Duration) *Synchronizer {
-	wg := sync.WaitGroup{}
-	mutex := &sync.Mutex{}
+	wg := &sync.WaitGroup{}
+	taskMutex := &sync.Mutex{}
 	tasks := make([]*task, 0)
 
 	return &Synchronizer{
-		tasks, &wg, timeout, mutex,
+		tasks, wg, timeout, taskMutex,
 	}
 }
 
 // Synchronizer keeps track of a list of tasks
 // and handles start/stop behaviour of these
 type Synchronizer struct {
-	tasks   []*task
-	wg      *sync.WaitGroup
+	tasks []*task
+	// Waitgroup used to await stop of
+	// all tasks
+	wg *sync.WaitGroup
+
+	// Timeout when waiting for task completion
 	timeout time.Duration
-	mutex   *sync.Mutex
+
+	// Lock for the task-list
+	taskMutex *sync.Mutex
 }
 
 // Allows chaining Every(duration).Do
@@ -105,7 +111,7 @@ func (this *Synchronizer) Continous(run emptyfunction, stop emptyfunction) {
 // used to keep track if all tasks gracefully
 // shut down.
 func (this *Synchronizer) Run() {
-	this.mutex.Lock()
+	this.taskMutex.Lock()
 	for _, t := range this.tasks {
 		// NOTE: It's very important to parameterize
 		// the goroutine, otherwise the task-value
@@ -117,7 +123,7 @@ func (this *Synchronizer) Run() {
 			defer this.wg.Done()
 		}(t)
 	}
-	this.mutex.Unlock()
+	this.taskMutex.Unlock()
 }
 
 // Signal quit to all running tasks
@@ -125,7 +131,7 @@ func (this *Synchronizer) Run() {
 func (this *Synchronizer) Stop() bool {
 
 	// Signal quit to all tasks
-	this.mutex.Lock()
+	this.taskMutex.Lock()
 	for _, t := range this.tasks {
 		// NOTE: It's very important to parameterize
 		// the goroutine, otherwise the task-value
@@ -136,7 +142,7 @@ func (this *Synchronizer) Stop() bool {
 		}(t)
 
 	}
-	this.mutex.Unlock()
+	this.taskMutex.Unlock()
 
 	doneChn := make(chan bool)
 
@@ -158,9 +164,9 @@ func (this *Synchronizer) Stop() bool {
 }
 
 func (this *Synchronizer) addTask(t *task) {
-	this.mutex.Lock()
+	this.taskMutex.Lock()
 	this.tasks = append(this.tasks, t)
-	this.mutex.Unlock()
+	this.taskMutex.Unlock()
 }
 
 func newTask(taskFn taskfunction) *task {
