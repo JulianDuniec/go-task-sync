@@ -52,3 +52,28 @@ Simple synchronization of background goroutines. Helpful when you want graceful 
     tasksync.BlockUntilQuit()
     timeout := synchronizer.Stop()
 
+### Example - HTTP-server
+
+    // This example uses github.com/hydrogen18/stoppableListener to shut down
+    // connections
+
+    synchronizer := tasksync.NewSynchronizer(10 * time.Second)
+    
+    listener, _ := net.Listen("tcp", port)
+    stoppableListener, _ := stoppableListener.New(listener)
+    server := http.Server{}
+
+    start := func() {
+        server.Serve(stoppableListener)
+    }
+
+    stop := func() {
+        stoppableListener.Stop()
+    }
+
+
+    synchronizer.Continous(start, stop)
+
+    tasksync.BlockUntilQuit()
+    timeout := synchronizer.Stop()
+
